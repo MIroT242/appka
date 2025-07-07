@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1d3557" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Nakládka</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; background: #f1faee; color: #1d3557; }
+    header { background: #1d3557; color: white; padding: 1em; text-align: center; font-size: 1.4em; font-weight: bold; }
+    main { padding: 1em; }
+    input, button { width: 100%; padding: 1em; margin-top: 1em; border-radius: 8px; border: 1px solid #ccc; font-size: 1em; box-sizing: border-box; }
+    button { background: #457b9d; color: white; border: none; }
+    button:hover { background: #1d3557; }
+    video, canvas, img { width: 100%; margin-top: 1em; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <header>📦 Nakládka</header>
+  <main>
+    <form id="form">
+      <input type="text" id="ref" placeholder="Unikátní reference*" required />
+      <input type="text" id="spz" placeholder="SPZ vozidla*" required />
+      <video id="video" autoplay playsinline></video>
+      <button type="button" id="snap">📸 Pořídit fotku</button>
+      <canvas id="canvas" style="display:none;"></canvas>
+      <button type="submit">✅ Uložit záznam</button>
+    </form>
+    <h2>Záznamy</h2>
+    <div id="entries"></div>
+    <button onclick="downloadCSV()">⬇️ Exportovat CSV</button>
+  </main>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      let localData = JSON.parse(localStorage.getItem('nakladky') || '[]');
+      const entriesDiv = document.getElementById('entries');
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      let imageData = null;
+
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => video.srcObject = stream)
+        .catch(err => alert("Kamera není dostupná: " + err));
+
+      document.getElementById('snap').addEventListener('click', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        imageData = canvas.toDataURL("image/png");
+        alert("Fotka pořízena.");
+      });
+
+      document.getElementById('form').addEventListener('submit', e => {
+        e.preventDefault();
+        const ref = document.getElementById('ref').value.trim();
+        const spz = document.getElementById('spz').value.trim();
+        if (!ref || !spz) return alert("Reference i SPZ jsou povinné");
+        if (!imageData) return alert("Pořiďte prosím fotku");
+
+        const entry = { id: ref, spz: spz, foto: imageData, cas: new Date().toISOString() };
+        localData.push(entry);
+        localStorage.setItem('nakladky', JSON.stringify(localData));
+        renderEntries();
+        document.getElementById('form').reset();
+        imageData = null;
+      });
+
+      function renderEntries() {
+        entriesDiv.innerHTML = '';
+        localData.forEach(e => {
+          entriesDiv.innerHTML += `<div><strong>${e.id}</strong> | ${new Date(e.cas).toLocaleString()}<br>SPZ: ${e.spz}<br><img src="${e.foto}" /></div>`;
+        });
+      }
+
+      window.downloadCSV = function () {
+        const rows = [['Reference','SPZ','Čas']];
+        localData.forEach(e => rows.push([e.id, e.spz, e.cas]));
+        const csv = rows.map(r => r.join(',')).join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'nakladky.csv';
+        a.click();
+      };
+
+      renderEntries();
+    });
+  </script>
+</body>
+</html>
